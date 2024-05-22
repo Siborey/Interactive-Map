@@ -6,32 +6,145 @@
     <title>Interactive Map</title>
     <!-- Include Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Geocoder Stylesheet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <!-- Jump to Your Location Button Stylesheet -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@v0.81.0/dist/L.Control.Locate.min.css" />
+    <!-- Routing Machine -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
 </head>
 <body>
     <!-- Create a div element to hold the map -->
-    <div id="map" style="height: 400px;"></div>
+    <div id="map" style="width: device-width; ;height: 80vh;"></div>
 
     <!-- Include Leaflet JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Your custom JavaScript code for the map will go here -->
+    <!-- Geocoder -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <!-- Jump to your location button  -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@v0.81.0/dist/L.Control.Locate.min.js" charset="utf-8"></script>
+    <!-- Map Print Button -->
+    <script src="leaflet.browser.print.min.js"></script>
+    <!-- Routing Machine -->
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <style type="text/css">
+
+    .leaflet-touch .leaflet-control-geocoder-icon {
+    width: 60px;
+    height: 30px;
+    }
+
+    </style>
+
+
 </body>
 </html>
 
 <script>
 // Initialize the map on the "map" div with a given center and zoom
-var map = L.map('map', {
-    center: [51.505, -0.09], // Latitude and longitude of the map center
-    zoom: 13 // Initial zoom level
-});
+var map = L.map('map').setView([0, 0], 14);
 
 // Add a tile layer (e.g., OpenStreetMap tiles)
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors'
-}).addTo(map);
 
-// Add a marker at a specific location (e.g., London)
-var marker = L.marker([51.505, -0.09]).addTo(map);
-marker.bindPopup('Hello, this is London!').openPopup();
+var OSM = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}); OSM.addTo(map);
+
+var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    minZoom: 2,
+	maxZoom: 20,
+	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+});
+Esri_WorldImagery.addTo(map);
+
+
+var googleStreets = L.tileLayer('http://{s}.google.com/vt?lyrs=m&x={x}&y={y}&z={z}',{
+    maxZoom: 20,
+    subdomains:['mt0','mt1','mt2','mt3']
+});
+googleStreets.addTo(map);
+
+// Basemap Toggle START //
+var overlayMaps= {
+    "Open Street Map": OSM,
+    "ESRI Imagery": Esri_WorldImagery,
+    "Google Default": googleStreets
+};
+
+var layerControl = L.control.layers(overlayMaps, null, { position: 'bottomright', collapsed: false }).addTo(map);
+
+
+// Basemap Toggle END //
+
+// Map Element - Scale Bar START //
+L.control.scale({
+        metric: true,
+        imperial: true,
+        maxWidth: 250,
+        position: 'bottomleft'
+    }).addTo(map);
+
+// Map Element - Scale Bar END //
+
+// Location Button START // 
+
+var lc = L.control
+  .locate({
+    position: "topleft",
+    function: {
+      title: "Jump to your location",
+    }
+  })
+  .addTo(map);
+
+// Location Button END // 
+
+//Print Map START//
+L.control.browserPrint({position: 'topleft', title: 'Print Your Map'}).addTo(map);
+// Print Map END //
+
+// Get the user's current location
+navigator.geolocation.getCurrentPosition(function(position) {
+    var userLat = position.coords.latitude;
+    var userLon = position.coords.longitude;
+
+    // Set the map center to the user's location
+    map.setView([userLat, userLon], 13);
+
+    // Add a marker for the user's location
+    L.marker([userLat, userLon]).addTo(map).bindPopup('Your Location').openPopup();
+
+    // Use the geocoder to get another location (e.g., "Paris")
+    var geocoder = L.Control.geocoder({
+        defaultMarkGeocode: false
+    }).on('markgeocode', function(e) {
+        var geocodeLat = e.geocode.center.lat;
+        var geocodeLon = e.geocode.center.lng;
+        var placeName = e.geocode.name;
+        var address = e.geocode.properties.label; // Address of the geocoded location
+
+        // Add a marker for the geocoded location with name and address
+        L.marker([geocodeLat, geocodeLon]).addTo(map).bindPopup(`Place: ${placeName}<br>Address: ${address}`).openPopup();
+
+        // Create a route between the user's location and the geocoded location
+        L.Routing.control({
+            waypoints: [
+                L.latLng(userLat, userLon),
+                L.latLng(geocodeLat, geocodeLon)
+            ],
+            routeWhileDragging: true,
+            collapsible: true,
+        }).addTo(map);
+    }).addTo(map);
+
+    // Optionally, you can customize the geocoder behavior and appearance
+    geocoder.options.placeholder = 'Search for a location...';
+}, function(error) {
+    console.error('Error getting location:', error.message);
+});
+
 
 
 
